@@ -1,0 +1,68 @@
+From 06ddd1df88952d7827cbc34f1201b7b3944f7440 Mon Sep 17 00:00:00 2001
+From: Rajat Khandelwal <rajat.khandelwal@intel.corp-partner.google.com>
+Date: Sat, 13 Aug 2022 09:29:43 +0530
+Subject: [PATCH] Enable wake on connect/disconnect in suspend
+
+Signed-off-by: Rajat Khandelwal <rajat.khandelwal@intel.corp-partner.google.com>
+Change-Id: Id364a8e546e0b66c38ac8ee38f7e10faf67f5865
+---
+ drivers/thunderbolt/switch.c  |  1 +
+ drivers/thunderbolt/tb_regs.h |  2 ++
+ drivers/thunderbolt/usb4.c    | 10 +++++-----
+ 3 files changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/thunderbolt/switch.c b/drivers/thunderbolt/switch.c
+index b350bb3b0393..62e5e358fa75 100644
+--- a/drivers/thunderbolt/switch.c
++++ b/drivers/thunderbolt/switch.c
+@@ -3014,6 +3014,7 @@ void tb_switch_suspend(struct tb_switch *sw, bool runtime)
+ 		flags |= TB_WAKE_ON_USB4;
+ 		flags |= TB_WAKE_ON_USB3 | TB_WAKE_ON_PCIE | TB_WAKE_ON_DP;
+ 	} else if (device_may_wakeup(&sw->dev)) {
++		flags |= TB_WAKE_ON_CONNECT | TB_WAKE_ON_DISCONNECT;
+ 		flags |= TB_WAKE_ON_USB4 | TB_WAKE_ON_USB3 | TB_WAKE_ON_PCIE;
+ 	}
+ 
+diff --git a/drivers/thunderbolt/tb_regs.h b/drivers/thunderbolt/tb_regs.h
+index a2c07c1972c9..1de76f77133c 100644
+--- a/drivers/thunderbolt/tb_regs.h
++++ b/drivers/thunderbolt/tb_regs.h
+@@ -338,6 +338,8 @@ struct tb_regs_port_header {
+ #define PORT_CS_18				0x12
+ #define PORT_CS_18_BE				BIT(8)
+ #define PORT_CS_18_TCM				BIT(9)
++#define PORT_CS_18_WOCS				BIT(16)
++#define PORT_CS_18_WODS				BIT(17)
+ #define PORT_CS_18_WOU4S			BIT(18)
+ #define PORT_CS_19				0x13
+ #define PORT_CS_19_PC				BIT(3)
+diff --git a/drivers/thunderbolt/usb4.c b/drivers/thunderbolt/usb4.c
+index ceddbe7e9f93..fb085c7a1ee9 100644
+--- a/drivers/thunderbolt/usb4.c
++++ b/drivers/thunderbolt/usb4.c
+@@ -197,17 +197,17 @@ static void usb4_switch_check_wakes(struct tb_switch *sw)
+ 
+ 	/* Check for any connected downstream ports for USB4 wake */
+ 	tb_switch_for_each_port(sw, port) {
+-		if (!tb_port_has_remote(port))
+-			continue;
+ 
+ 		if (tb_port_read(port, &val, TB_CFG_PORT,
+ 				 port->cap_usb4 + PORT_CS_18, 1))
+ 			break;
+ 
+-		tb_port_dbg(port, "USB4 wake: %s\n",
+-			    (val & PORT_CS_18_WOU4S) ? "yes" : "no");
++		tb_port_dbg(port, "USB4 wake: %s, Connect wake: %s, Disconnect wake: %s\n",
++				(val & PORT_CS_18_WOU4S) ? "yes" : "no",
++				(val & PORT_CS_18_WOCS) ? "yes" : "no",
++				(val & PORT_CS_18_WODS) ? "yes" : "no");
+ 
+-		if (val & PORT_CS_18_WOU4S)
++		if (val & (PORT_CS_18_WOCS | PORT_CS_18_WODS | PORT_CS_18_WOU4S))
+ 			wakeup = true;
+ 	}
+ 
+-- 
+2.17.1
+
